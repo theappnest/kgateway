@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -61,6 +62,9 @@ var (
 		},
 		"TestPolicyMerging": {
 			Manifests: []string{policyMergingManifest},
+		},
+		"TestParentRefSameNamespace": {
+			Manifests: []string{parentRefSameNamespaceManifest},
 		},
 	}
 )
@@ -322,4 +326,35 @@ func (s *testingSuite) TestPolicyMerging() {
 		curl.WithPath(pathTeam2),
 		curl.WithHostHeader(routeParent2Host),
 	)
+}
+
+// TestParentRefSameNamespace verifies that a child route whose HTTPRoute parentRef omits the
+// namespace (so it defaults to the child's own namespace) gets a status entry for that parentRef.
+func (s *testingSuite) TestParentRefSameNamespace() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(s.Ctx, routeParentSameNs.Name, routeParentSameNs.Namespace,
+		gwv1.RouteConditionAccepted, metav1.ConditionTrue, 10*time.Second, 1*time.Second)
+
+	// The child is attached to the parent, so traffic reaches it
+	s.gateway.Send(s.T(), &testmatchers.HttpResponse{StatusCode: http.StatusOK, Body: ContainSubstring(pathTeam1)},
+		curl.WithPath(pathTeam1))
+
+	// The child's status must have an entry for its parentRef exactly as written in its spec
+	expectedParentRef := gwv1.ParentReference{
+		Group: new(gwv1.Group(gwv1.GroupName)),
+		Kind:  new(gwv1.Kind("HTTPRoute")),
+		Name:  gwv1.ObjectName(routeParentSameNs.Name),
+	}
+	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g Gomega) {
+		route := &gwv1.HTTPRoute{}
+		err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx,
+			types.NamespacedName{Name: routeChildSameNs.Name, Namespace: routeChildSameNs.Namespace}, route)
+		g.Expect(err).NotTo(HaveOccurred(), "can get child httproute")
+		g.Expect(route.Status.Parents).To(ContainElement(And(
+			HaveField("ParentRef", Equal(expectedParentRef)),
+			HaveField("Conditions", ContainElement(And(
+				HaveField("Type", Equal(string(gwv1.RouteConditionAccepted))),
+				HaveField("Status", Equal(metav1.ConditionTrue)),
+			))),
+		)), "child route status should have an Accepted entry for its parentRef; full status: %+v", route.Status)
+	}, 10*time.Second, 1*time.Second).Should(Succeed())
 }

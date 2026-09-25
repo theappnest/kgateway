@@ -534,6 +534,13 @@ func BuildRouteStatus(
 	// Process the parent references to build the RouteParentStatus
 	for _, parentRef := range parentRefs {
 		parentStatusReport := routeReport.getParentRefOrNil(&parentRef)
+		if parentStatusReport == nil && parentRef.Namespace == nil {
+			// An omitted namespace refers to the route's own namespace. Delegated child routes
+			// are reported against their parent with the namespace set, so look that up too.
+			defaultedRef := parentRef
+			defaultedRef.Namespace = new(gwv1.Namespace(obj.GetNamespace()))
+			parentStatusReport = routeReport.getParentRefOrNil(&defaultedRef)
+		}
 		if parentStatusReport == nil {
 			// report doesn't have an entry for this parentRef, meaning we didn't translate it
 			// probably because it's a parent that we don't control (e.g. Gateway from diff. controller)

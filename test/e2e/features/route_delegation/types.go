@@ -50,6 +50,19 @@ var (
 			Namespace: "infra",
 		},
 	}
+	// ref: parentref_same_namespace.yaml
+	routeParentSameNs = &gwv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "parent-same-ns",
+			Namespace: "team1",
+		},
+	}
+	routeChildSameNs = &gwv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svc1-child",
+			Namespace: "team1",
+		},
+	}
 	pathTeam1 = "anything/team1/foo"
 	pathTeam2 = "anything/team2/foo"
 )
@@ -79,4 +92,5 @@ var (
 	matcherInheritanceManifest          = filepath.Join(fsutils.MustGetThisDir(), "testdata", "matcher_inheritance.yaml")
 	routeWeightManifest                 = filepath.Join(fsutils.MustGetThisDir(), "testdata", "route_weight.yaml")
 	policyMergingManifest               = filepath.Join(fsutils.MustGetThisDir(), "testdata", "policy_merging.yaml")
+	parentRefSameNamespaceManifest      = filepath.Join(fsutils.MustGetThisDir(), "testdata", "parentref_same_namespace.yaml")
 )
